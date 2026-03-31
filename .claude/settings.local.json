@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm view:*)",
+      "Bash(npx:*)",
+      "Bash(mkdir -p /tmp/daily-reading-temp)",
+      "Read(//tmp/**)",
+      "Bash(printf nonnonnon:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}
