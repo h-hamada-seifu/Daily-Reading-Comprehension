@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import ScoreCard from "@/components/ScoreCard";
-import type { Scores } from "@/types/database";
+import type { Article, Scores } from "@/types/database";
 
 interface ResultPageProps {
   params: Promise<{ id: string }>;
@@ -32,10 +32,8 @@ export default async function ResultPage({ params }: ResultPageProps) {
     notFound();
   }
 
-  const article = submission.articles as unknown as {
-    title: string;
-    body: string;
-  } | null;
+  // Supabaseのrelation queryの型がanyになるため明示的にキャスト
+  const article = submission.articles as Pick<Article, "title" | "body"> | null;
 
   return (
     <div className="flex flex-col gap-4 p-4 pb-8">
@@ -45,7 +43,7 @@ export default async function ResultPage({ params }: ResultPageProps) {
 
       <ScoreCard
         scoreOverall={submission.score_overall}
-        scores={submission.scores as unknown as Scores}
+        scores={submission.scores as Scores}
       />
 
       {/* 提出した要約 */}

@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { geminiModel } from "@/lib/gemini/client";
-import { buildFeedbackPrompt, convertGeminiScores } from "@/lib/gemini/prompts";
-import type { GeminiFeedbackResponse } from "@/types/gemini";
+import {
+  buildFeedbackPrompt,
+  convertGeminiScores,
+  validateFeedbackResponse,
+} from "@/lib/gemini/prompts";
 
 /** 要約の文字数制限 */
 const MIN_LENGTH = 80;
@@ -23,11 +26,18 @@ export async function POST(request: NextRequest) {
   }
 
   // リクエストボディの取得とバリデーション
-  const body = await request.json();
-  const { article_id, summary } = body as {
-    article_id: string;
-    summary: string;
-  };
+  let article_id: string;
+  let summary: string;
+  try {
+    const body = await request.json();
+    article_id = body.article_id;
+    summary = body.summary;
+  } catch {
+    return NextResponse.json(
+      { error: "リクエストの形式が不正です" },
+      { status: 400 }
+    );
+  }
 
   if (!article_id || !summary) {
     return NextResponse.json(
@@ -74,13 +84,23 @@ export async function POST(request: NextRequest) {
   }
 
   // Gemini APIでフィードバック生成
-  const prompt = buildFeedbackPrompt(article.title, article.body, trimmedSummary);
-  const result = await geminiModel.generateContent(prompt);
-  const text = result.response.text();
-  const rawScores: GeminiFeedbackResponse = JSON.parse(text);
-
-  // スコア変換（100点満点 → 25点満点）
-  const { scoreOverall, scores } = convertGeminiScores(rawScores);
+  let scoreOverall: number;
+  let scores;
+  try {
+    const prompt = buildFeedbackPrompt(article.title, article.body, trimmedSummary);
+    const result = await geminiModel.generateContent(prompt);
+    const text = result.response.text();
+    const rawScores = validateFeedbackResponse(JSON.parse(text));
+    const converted = convertGeminiScores(rawScores);
+    scoreOverall = converted.scoreOverall;
+    scores = converted.scores;
+  } catch (err) {
+    console.error("フィードバック生成エラー:", err);
+    return NextResponse.json(
+      { error: "フィードバックの生成に失敗しました" },
+      { status: 502 }
+    );
+  }
 
   // DBに保存
   const { data: submission, error: saveError } = await supabase

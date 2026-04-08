@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { geminiModel } from "@/lib/gemini/client";
-import { buildArticlePrompt } from "@/lib/gemini/prompts";
+import { buildArticlePrompt, validateArticleResponse } from "@/lib/gemini/prompts";
 import { getTomorrowJST } from "@/lib/utils/date";
-import type { GenerateArticleResponse } from "@/types/gemini";
 
 /**
  * Cronバッチ: 翌日分の記事を自動生成
@@ -34,10 +33,19 @@ export async function GET(request: NextRequest) {
   }
 
   // Gemini APIで記事生成
-  const prompt = buildArticlePrompt(publishDate);
-  const result = await geminiModel.generateContent(prompt);
-  const text = result.response.text();
-  const article: GenerateArticleResponse = JSON.parse(text);
+  let article;
+  try {
+    const prompt = buildArticlePrompt(publishDate);
+    const result = await geminiModel.generateContent(prompt);
+    const text = result.response.text();
+    article = validateArticleResponse(JSON.parse(text));
+  } catch (err) {
+    console.error("記事生成エラー:", err);
+    return NextResponse.json(
+      { error: "記事の生成に失敗しました" },
+      { status: 502 }
+    );
+  }
 
   // DBに保存
   const { data, error } = await supabase

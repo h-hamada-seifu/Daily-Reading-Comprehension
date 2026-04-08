@@ -1,4 +1,4 @@
-import type { GeminiFeedbackResponse } from "@/types/gemini";
+import type { GenerateArticleResponse, GeminiFeedbackResponse } from "@/types/gemini";
 import type { Scores } from "@/types/database";
 
 /**
@@ -60,6 +60,43 @@ ${summary}
   "own_words": { "score": 90, "comment": "コメント" },
   "vocabulary": { "score": 75, "comment": "コメント" }
 }`;
+}
+
+/**
+ * 記事生成レスポンスのバリデーション
+ * @throws バリデーション失敗時にError
+ */
+export function validateArticleResponse(data: unknown): GenerateArticleResponse {
+  const obj = data as Record<string, unknown>;
+  if (
+    typeof obj?.title !== "string" ||
+    typeof obj?.body !== "string" ||
+    !Array.isArray(obj?.vocab_notes)
+  ) {
+    throw new Error("記事生成レスポンスの形式が不正です");
+  }
+  return obj as unknown as GenerateArticleResponse;
+}
+
+/**
+ * フィードバックレスポンスのバリデーション
+ * @throws バリデーション失敗時にError
+ */
+export function validateFeedbackResponse(data: unknown): GeminiFeedbackResponse {
+  const obj = data as Record<string, unknown>;
+  const keys = ["main_point", "grammar", "own_words", "vocabulary"] as const;
+  for (const key of keys) {
+    const item = obj?.[key] as Record<string, unknown> | undefined;
+    if (
+      typeof item?.score !== "number" ||
+      item.score < 0 ||
+      item.score > 100 ||
+      typeof item?.comment !== "string"
+    ) {
+      throw new Error(`フィードバックレスポンスの ${key} が不正です`);
+    }
+  }
+  return obj as unknown as GeminiFeedbackResponse;
 }
 
 /**
