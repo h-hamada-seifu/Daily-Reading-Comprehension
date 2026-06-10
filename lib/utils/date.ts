@@ -56,6 +56,16 @@ export function getMonthDateRange(month: string): { start: string; end: string }
 }
 
 /**
+ * 月選択パラメータを検証して返す（不正・未来の月は当月にフォールバック）
+ */
+export function resolveMonthParam(monthParam: string | undefined): string {
+  const currentMonth = getCurrentMonthJST();
+  return monthParam && isValidMonth(monthParam) && monthParam <= currentMonth
+    ? monthParam
+    : currentMonth;
+}
+
+/**
  * 月（YYYY-MM）をdeltaヶ月ずらしたYYYY-MM形式で返す
  */
 export function shiftMonth(month: string, delta: number): string {
@@ -72,6 +82,14 @@ export function shiftMonth(month: string, delta: number): string {
 export function formatMonthLabel(month: string): string {
   const [year, monthNum] = month.split("-").map(Number);
   return `${year}年${monthNum}月`;
+}
+
+/**
+ * 日付（YYYY-MM-DD）を「M/D」形式で返す
+ */
+export function formatShortDayLabel(date: string): string {
+  const [, monthNum, day] = date.split("-").map(Number);
+  return `${monthNum}/${day}`;
 }
 
 /**

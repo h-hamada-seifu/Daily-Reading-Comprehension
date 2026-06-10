@@ -1,24 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getAppUser } from "@/lib/auth/app-user";
+import { requireStudent } from "@/lib/auth/guards";
 import { getTodayJST } from "@/lib/utils/date";
 import ArticleCard from "@/components/ArticleCard";
 import SummaryForm from "@/components/SummaryForm";
 
 export default async function Home() {
-  const appUser = await getAppUser();
-
-  if (!appUser) {
-    redirect("/login");
-  }
-
-  // 教師はダッシュボード専用
-  if (appUser.role === "teacher") {
-    redirect("/dashboard");
-  }
-
   const supabase = await createClient();
+  const appUser = await requireStudent(supabase);
+
   const today = getTodayJST();
 
   // 今日の記事を取得

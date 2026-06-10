@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getAppUser } from "@/lib/auth/app-user";
+import { fetchAppUserByAuthId } from "@/lib/auth/app-user";
 import { geminiModel } from "@/lib/gemini/client";
 import {
   buildFeedbackPrompt,
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
   }
 
   // 名簿照合・ロールチェック（教師は提出不可）
-  const appUser = await getAppUser();
+  const appUser = await fetchAppUserByAuthId(supabase, user.id);
   if (!appUser) {
     return NextResponse.json(
       { error: "名簿に登録されていません" },
@@ -132,6 +132,23 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (saveError) {
+    // 同時提出でUNIQUE制約(user_id, article_id)に違反した場合は409を返す
+    if (saveError.code === "23505") {
+      const { data: existing } = await supabase
+        .from("submissions")
+        .select("id")
+        .eq("user_id", appUser.id)
+        .eq("article_id", article_id)
+        .maybeSingle();
+      return NextResponse.json(
+        {
+          error: "この記事には既に提出済みです",
+          submission_id: existing?.id,
+        },
+        { status: 409 }
+      );
+    }
+
     console.error("提出保存エラー:", saveError);
     return NextResponse.json(
       { error: "提出の保存に失敗しました" },

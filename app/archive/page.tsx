@@ -1,16 +1,13 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getAppUser } from "@/lib/auth/app-user";
+import { requireStudent } from "@/lib/auth/guards";
 import {
   formatDayLabel,
-  formatMonthLabel,
-  getCurrentMonthJST,
   getMonthDateRange,
   getTodayJST,
-  isValidMonth,
-  shiftMonth,
+  resolveMonthParam,
 } from "@/lib/utils/date";
+import MonthNav from "@/components/MonthNav";
 
 interface ArchivePageProps {
   searchParams: Promise<{ month?: string }>;
@@ -18,25 +15,12 @@ interface ArchivePageProps {
 
 /** 過去の問題一覧（提出済み/未提出のステータス付き） */
 export default async function ArchivePage({ searchParams }: ArchivePageProps) {
-  const appUser = await getAppUser();
-
-  if (!appUser) {
-    redirect("/login");
-  }
-
-  // 教師はダッシュボード専用
-  if (appUser.role === "teacher") {
-    redirect("/dashboard");
-  }
-
-  const currentMonth = getCurrentMonthJST();
-  const { month: monthParam } = await searchParams;
-  const month =
-    monthParam && isValidMonth(monthParam) && monthParam <= currentMonth
-      ? monthParam
-      : currentMonth;
-
   const supabase = await createClient();
+  const appUser = await requireStudent(supabase);
+
+  const { month: monthParam } = await searchParams;
+  const month = resolveMonthParam(monthParam);
+
   const today = getTodayJST();
   const { start, end } = getMonthDateRange(month);
 
@@ -62,10 +46,6 @@ export default async function ArchivePage({ searchParams }: ArchivePageProps) {
     (submissions ?? []).map((s) => [s.article_id, s])
   );
 
-  const prevMonth = shiftMonth(month, -1);
-  const nextMonth = shiftMonth(month, 1);
-  const hasNextMonth = nextMonth <= currentMonth;
-
   return (
     <div className="flex flex-col gap-4 p-4 pb-8">
       <header className="pt-2 flex items-end justify-between">
@@ -75,26 +55,7 @@ export default async function ArchivePage({ searchParams }: ArchivePageProps) {
         </Link>
       </header>
 
-      {/* 月選択 */}
-      <div className="flex items-center justify-between bg-white rounded-xl shadow-sm px-2 py-1.5">
-        <Link
-          href={`/archive?month=${prevMonth}`}
-          className="px-3 py-1.5 text-sm text-blue-600 hover:underline"
-        >
-          ← 前の月
-        </Link>
-        <span className="text-sm font-medium">{formatMonthLabel(month)}</span>
-        {hasNextMonth ? (
-          <Link
-            href={`/archive?month=${nextMonth}`}
-            className="px-3 py-1.5 text-sm text-blue-600 hover:underline"
-          >
-            次の月 →
-          </Link>
-        ) : (
-          <span className="px-3 py-1.5 text-sm text-gray-300">次の月 →</span>
-        )}
-      </div>
+      <MonthNav month={month} basePath="/archive" />
 
       {/* 記事一覧 */}
       {articles && articles.length > 0 ? (

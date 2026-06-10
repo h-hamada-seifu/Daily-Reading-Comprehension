@@ -1,49 +1,27 @@
-import Link from "next/link";
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getAppUser } from "@/lib/auth/app-user";
+import { requireTeacher } from "@/lib/auth/guards";
 import {
-  formatMonthLabel,
-  getCurrentMonthJST,
+  formatShortDayLabel,
   getMonthDateRange,
   getTodayJST,
-  isValidMonth,
-  shiftMonth,
+  resolveMonthParam,
 } from "@/lib/utils/date";
+import MonthNav from "@/components/MonthNav";
 
 interface DashboardPageProps {
   searchParams: Promise<{ month?: string }>;
-}
-
-/** 日付（YYYY-MM-DD）を「M/D」形式で返す（マトリクス表の列見出し用） */
-function formatShortDay(date: string): string {
-  const [, monthNum, day] = date.split("-").map(Number);
-  return `${monthNum}/${day}`;
 }
 
 /** 教師向けダッシュボード（生徒×日付の点数マトリクス表） */
 export default async function DashboardPage({
   searchParams,
 }: DashboardPageProps) {
-  const appUser = await getAppUser();
-
-  if (!appUser) {
-    redirect("/login");
-  }
-
-  // 生徒はトップページへ
-  if (appUser.role !== "teacher") {
-    redirect("/");
-  }
-
-  const currentMonth = getCurrentMonthJST();
-  const { month: monthParam } = await searchParams;
-  const month =
-    monthParam && isValidMonth(monthParam) && monthParam <= currentMonth
-      ? monthParam
-      : currentMonth;
-
   const supabase = await createClient();
+  await requireTeacher(supabase);
+
+  const { month: monthParam } = await searchParams;
+  const month = resolveMonthParam(monthParam);
+
   const today = getTodayJST();
   const { start, end } = getMonthDateRange(month);
 
@@ -79,10 +57,6 @@ export default async function DashboardPage({
     ])
   );
 
-  const prevMonth = shiftMonth(month, -1);
-  const nextMonth = shiftMonth(month, 1);
-  const hasNextMonth = nextMonth <= currentMonth;
-
   return (
     <div className="flex flex-col gap-4 p-4 pb-8">
       <header className="pt-2">
@@ -92,26 +66,7 @@ export default async function DashboardPage({
         </p>
       </header>
 
-      {/* 月選択 */}
-      <div className="flex items-center justify-between bg-white rounded-xl shadow-sm px-2 py-1.5">
-        <Link
-          href={`/dashboard?month=${prevMonth}`}
-          className="px-3 py-1.5 text-sm text-blue-600 hover:underline"
-        >
-          ← 前の月
-        </Link>
-        <span className="text-sm font-medium">{formatMonthLabel(month)}</span>
-        {hasNextMonth ? (
-          <Link
-            href={`/dashboard?month=${nextMonth}`}
-            className="px-3 py-1.5 text-sm text-blue-600 hover:underline"
-          >
-            次の月 →
-          </Link>
-        ) : (
-          <span className="px-3 py-1.5 text-sm text-gray-300">次の月 →</span>
-        )}
-      </div>
+      <MonthNav month={month} basePath="/dashboard" />
 
       {/* マトリクス表 */}
       {students && students.length > 0 && articles && articles.length > 0 ? (
@@ -127,7 +82,7 @@ export default async function DashboardPage({
                     key={article.id}
                     className="font-medium text-gray-500 px-3 py-2 text-center whitespace-nowrap"
                   >
-                    {formatShortDay(article.publish_date)}
+                    {formatShortDayLabel(article.publish_date)}
                   </th>
                 ))}
               </tr>

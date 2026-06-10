@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getAppUser } from "@/lib/auth/app-user";
+import { requireStudent } from "@/lib/auth/guards";
 import ScoreCard from "@/components/ScoreCard";
 import type { Article, Scores } from "@/types/database";
 
@@ -11,18 +11,8 @@ interface ResultPageProps {
 
 export default async function ResultPage({ params }: ResultPageProps) {
   const { id } = await params;
-  const appUser = await getAppUser();
-
-  if (!appUser) {
-    redirect("/login");
-  }
-
-  // 教師はダッシュボード専用
-  if (appUser.role === "teacher") {
-    redirect("/dashboard");
-  }
-
   const supabase = await createClient();
+  const appUser = await requireStudent(supabase);
 
   // 提出データ取得（自分のデータのみRLSで制限されるが、念のためuser_idも確認）
   const { data: submission } = await supabase
