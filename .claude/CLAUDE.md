@@ -36,6 +36,9 @@
 ### 2.3 認証
 - **方式**: Supabase Auth + Google OAuth
 - **ドメイン制限**: `i-seifu.jp` のGoogleアカウントのみ
+- **名簿照合**: usersテーブルに事前登録されたメールアドレスのみログイン可
+- **ロール判定**: メールのローカル部が数字のみ→生徒（＝学籍番号）、アルファベットを含む→教師
+- **ロール別画面**: 生徒→ `/`（読解練習）、教師→ `/dashboard`（ダッシュボード専用、提出不可）
 
 ---
 
@@ -47,14 +50,18 @@ Next.js App Router構成に従う。
 Daily-Reading-Comprehension/
 ├── app/                    # App Router ページ・レイアウト
 │   ├── layout.tsx          # ルートレイアウト
-│   ├── page.tsx            # トップ（今日の記事）
+│   ├── page.tsx            # トップ（今日の記事・生徒用）
 │   ├── login/              # ログイン画面
+│   ├── archive/            # 過去の問題一覧（生徒用）
+│   ├── article/[id]/       # 過去記事の提出ページ（生徒用）
+│   ├── dashboard/          # ダッシュボード（教師用）
 │   ├── result/[id]/        # フィードバック表示
 │   └── api/                # API Routes
 │       ├── feedback/       # 要約提出・採点
 │       └── generate-article/ # 夜間バッチ（記事生成）
 ├── components/             # UIコンポーネント
 ├── lib/                    # ユーティリティ・設定
+│   ├── auth/               # ロール判定・アプリ内ユーザー取得
 │   ├── supabase/           # Supabaseクライアント設定
 │   └── gemini/             # Gemini API設定・プロンプト
 ├── types/                  # TypeScript型定義
@@ -114,6 +121,20 @@ const model = genAI.getGenerativeModel({
 
 ## 5. データモデル
 
+### users（ユーザーテーブル・名簿）
+| カラム | 型 | 説明 |
+|--------|----|------|
+| `id` | uuid | PK |
+| `email` | text | メールアドレス（UNIQUE、名簿照合キー） |
+| `student_number` | text | 学籍番号（生徒のみ、UNIQUE） |
+| `name` | text | 氏名（教師が事前登録） |
+| `class_name` | text | クラス（現時点では未使用） |
+| `role` | text | `student` / `teacher` |
+| `auth_user_id` | uuid | FK → auth.users（初回ログイン時に紐付け） |
+| `created_at` | timestamptz | 登録日時 |
+
+- 名簿は教師が事前登録（`supabase/seed/users_seed.sql` 参照）。未登録アカウントはログイン拒否
+
 ### articles（記事テーブル）
 | カラム | 型 | 説明 |
 |--------|----|------|
@@ -128,15 +149,16 @@ const model = genAI.getGenerativeModel({
 | カラム | 型 | 説明 |
 |--------|----|------|
 | `id` | uuid | PK |
-| `user_id` | uuid | FK → auth.users |
+| `user_id` | uuid | FK → users（アプリ内ユーザー） |
 | `article_id` | uuid | FK → articles |
 | `summary` | text | 生徒の要約文 |
 | `score_overall` | int2 | 総合スコア（0〜100） |
 | `scores` | jsonb | 4観点スコア＋コメント |
 | `submitted_at` | timestamptz | 提出日時 |
 
-- `(user_id, article_id)` にUNIQUE制約で1日1回制限を実現
-- RLS（Row Level Security）を有効にし、生徒は自分のデータのみアクセス可能
+- `(user_id, article_id)` にUNIQUE制約で記事ごと1回制限を実現（過去記事への遡り提出は可）
+- RLS（Row Level Security）を有効にし、生徒は自分のデータのみ、教師は全生徒分を閲覧のみ可能
+- articlesは公開日が当日（JST）以前のみ閲覧可（夜間バッチの翌日分を隠す）
 
 ---
 

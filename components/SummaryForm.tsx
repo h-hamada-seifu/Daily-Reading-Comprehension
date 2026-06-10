@@ -37,6 +37,11 @@ export default function SummaryForm({ articleId }: SummaryFormProps) {
       const data = await res.json();
 
       if (!res.ok) {
+        // 提出済み（409）なら既存のフィードバック画面へ誘導する
+        if (res.status === 409 && data.submission_id) {
+          router.push(`/result/${data.submission_id}`);
+          return;
+        }
         setError(data.error || "エラーが発生しました");
         return;
       }

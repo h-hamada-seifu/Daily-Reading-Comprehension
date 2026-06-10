@@ -1,5 +1,11 @@
 import type { Metadata, Viewport } from "next";
+import { Noto_Sans_JP } from "next/font/google";
 import "./globals.css";
+
+const notoSansJP = Noto_Sans_JP({
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
+});
 
 export const metadata: Metadata = {
   title: "N2読解練習",
@@ -19,15 +25,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja">
-      <head>
-        <link
-          href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap"
-          rel="stylesheet"
-        />
-      </head>
       <body
-        className="antialiased bg-gray-50 text-gray-900"
-        style={{ fontFamily: "'Noto Sans JP', sans-serif" }}
+        className={`${notoSansJP.className} antialiased bg-gray-50 text-gray-900`}
       >
         <main className="mx-auto max-w-md min-h-dvh">{children}</main>
       </body>

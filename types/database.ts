@@ -1,3 +1,21 @@
+/** ユーザーのロール */
+export type UserRole = "student" | "teacher";
+
+/** users テーブルの行（アプリ内ユーザー名簿） */
+export type AppUser = {
+  id: string;
+  email: string;
+  /** 学籍番号（生徒のみ。教師は null） */
+  student_number: string | null;
+  name: string;
+  /** クラス（現時点では未使用） */
+  class_name: string | null;
+  role: UserRole;
+  /** 初回ログイン時に auth.users と紐付け */
+  auth_user_id: string | null;
+  created_at: string;
+};
+
 /** 語彙メモ（1件分） */
 export type VocabNote = {
   word: string;
@@ -48,6 +66,12 @@ export type Submission = {
 export type Database = {
   public: {
     Tables: {
+      users: {
+        Row: AppUser;
+        Insert: Omit<AppUser, "id" | "created_at">;
+        Update: Partial<Omit<AppUser, "id" | "created_at">>;
+        Relationships: [];
+      };
       articles: {
         Row: Article;
         Insert: Omit<Article, "id" | "created_at">;
@@ -72,6 +96,13 @@ export type Database = {
             columns: ["article_id"];
             isOneToOne: false;
             referencedRelation: "articles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "submissions_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
             referencedColumns: ["id"];
           },
         ];

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { fetchAppUserByAuthId } from "@/lib/auth/app-user";
 import { geminiModel } from "@/lib/gemini/client";
 import {
   buildFeedbackPrompt,
@@ -23,6 +24,21 @@ export async function POST(request: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
+  }
+
+  // 名簿照合・ロールチェック（教師は提出不可）
+  const appUser = await fetchAppUserByAuthId(supabase, user.id);
+  if (!appUser) {
+    return NextResponse.json(
+      { error: "名簿に登録されていません" },
+      { status: 403 }
+    );
+  }
+  if (appUser.role === "teacher") {
+    return NextResponse.json(
+      { error: "教師アカウントでは提出できません" },
+      { status: 403 }
+    );
   }
 
   // リクエストボディの取得とバリデーション
@@ -58,7 +74,7 @@ export async function POST(request: NextRequest) {
   const { data: existingSubmission } = await supabase
     .from("submissions")
     .select("id")
-    .eq("user_id", user.id)
+    .eq("user_id", appUser.id)
     .eq("article_id", article_id)
     .maybeSingle();
 
@@ -69,7 +85,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 記事の取得
+  // 記事の取得（RLSにより公開日が当日以前の記事のみ取得できる＝未来の記事は提出不可）
   const { data: article, error: articleError } = await supabase
     .from("articles")
     .select("title, body")
@@ -106,7 +122,7 @@ export async function POST(request: NextRequest) {
   const { data: submission, error: saveError } = await supabase
     .from("submissions")
     .insert({
-      user_id: user.id,
+      user_id: appUser.id,
       article_id,
       summary: trimmedSummary,
       score_overall: scoreOverall,
@@ -116,6 +132,23 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (saveError) {
+    // 同時提出でUNIQUE制約(user_id, article_id)に違反した場合は409を返す
+    if (saveError.code === "23505") {
+      const { data: existing } = await supabase
+        .from("submissions")
+        .select("id")
+        .eq("user_id", appUser.id)
+        .eq("article_id", article_id)
+        .maybeSingle();
+      return NextResponse.json(
+        {
+          error: "この記事には既に提出済みです",
+          submission_id: existing?.id,
+        },
+        { status: 409 }
+      );
+    }
+
     console.error("提出保存エラー:", saveError);
     return NextResponse.json(
       { error: "提出の保存に失敗しました" },
