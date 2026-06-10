@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getAppUser } from "@/lib/auth/app-user";
 import ScoreCard from "@/components/ScoreCard";
 import type { Article, Scores } from "@/types/database";
 
@@ -9,23 +11,25 @@ interface ResultPageProps {
 
 export default async function ResultPage({ params }: ResultPageProps) {
   const { id } = await params;
-  const supabase = await createClient();
+  const appUser = await getAppUser();
 
-  // ユーザー情報取得
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!appUser) {
     redirect("/login");
   }
+
+  // 教師はダッシュボード専用
+  if (appUser.role === "teacher") {
+    redirect("/dashboard");
+  }
+
+  const supabase = await createClient();
 
   // 提出データ取得（自分のデータのみRLSで制限されるが、念のためuser_idも確認）
   const { data: submission } = await supabase
     .from("submissions")
     .select("*, articles(*)")
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("user_id", appUser.id)
     .single();
 
   if (!submission) {
@@ -63,12 +67,14 @@ export default async function ResultPage({ params }: ResultPageProps) {
         </div>
       )}
 
-      <a
-        href="/"
-        className="block text-center text-sm text-blue-600 hover:underline py-2"
-      >
-        トップに戻る
-      </a>
+      <div className="flex items-center justify-center gap-6 py-2">
+        <Link href="/" className="text-sm text-blue-600 hover:underline">
+          トップに戻る
+        </Link>
+        <Link href="/archive" className="text-sm text-blue-600 hover:underline">
+          過去の問題
+        </Link>
+      </div>
     </div>
   );
 }
